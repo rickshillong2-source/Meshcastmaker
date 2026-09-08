@@ -1,0 +1,89 @@
+:root {
+  --bg: #1b1d23;
+  --panel: #23262e;
+  --panel-2: #2c2f39;
+  --border: #3a3d47;
+  --text: #e6e6ea;
+  --text-dim: #9a9da8;
+  --accent: #4f9cff;
+  --accent-hover: #6fb0ff;
+  --danger: #ff6b6b;
+  font: 14px/1.4 system-ui, 'Segoe UI', Roboto, sans-serif;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+button {
+  font: inherit;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: var(--border);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0a1420;
+  font-weight: 600;
+}
+
+button.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+button.danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+input[type='text'],
+input[type='number'],
+select {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 6px;
+  width: 100%;
+}
+
+label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 2px;
+}
+
+h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  margin: 0 0 8px;
+}
