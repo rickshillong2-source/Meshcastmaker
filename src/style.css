@@ -188,6 +188,12 @@ body {
   margin-top: 10px;
 }
 
+.link-btn.active-pick {
+  background: var(--orange);
+  border-color: var(--orange);
+  color: #fff;
+}
+
 .model-size {
   font-size: 13px;
   color: var(--ink-soft);

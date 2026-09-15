@@ -12,6 +12,7 @@ import {
   autoPieceCount,
   DEFAULT_MOLD_OPTIONS,
   MATERIAL_DENSITY_G_PER_ML,
+  AXIS_QUATERNIONS,
   type SplitCount,
 } from './mold';
 import { parseSTL, exportSTL, countTriangles, computeVolume, downloadBlob } from './stl';
@@ -80,7 +81,8 @@ function showToast(msg: string) {
 
 function computeEffectiveGeometry(): THREE.BufferGeometry | null {
   if (!state.rawGeometry) return null;
-  const oriented = orientGeometry(state.rawGeometry, state.upAxis);
+  const quaternion = state.customOrientation ?? AXIS_QUATERNIONS[state.upAxis];
+  const oriented = orientGeometry(state.rawGeometry, quaternion);
   const scale = state.scalePercent / 100;
   oriented.scale(scale, scale, scale);
   oriented.computeVertexNormals();
@@ -181,6 +183,7 @@ function render() {
     onAutoOrient: () => {
       if (!state.rawGeometry) return;
       state.upAxis = autoOrientUpAxis(state.rawGeometry);
+      state.customOrientation = null;
       invalidateGenerated();
       render();
       updateScenePreview();
@@ -188,11 +191,13 @@ function render() {
     },
     onUpAxis: (axis) => {
       state.upAxis = axis;
+      state.customOrientation = null;
       invalidateGenerated();
       render();
       updateScenePreview();
       viewer.fitView();
     },
+    onFacePickToggle: handleFacePickToggle,
     onPieces: (p) => {
       state.pieces = p;
       invalidateGenerated();
@@ -205,9 +210,10 @@ function render() {
       alert(
         'How it works\n\n' +
           '1. Upload a watertight STL.\n' +
-          '2. MeshCastMaker wraps it in a solid block, hollows out a cavity matching the model, and adds a pour spout.\n' +
-          '3. The block is split into 2 or 4 pieces so it can release from the model and be printed flat.\n' +
-          '4. Print the pieces, band or clamp them together, and pour your wax, resin, soap, or plaster through the spout.',
+          '2. Turbit Organic Cast Maker wraps it in a solid block, hollows out a cavity matching the model, and adds a pour spout.\n' +
+          '3. Orient it with X/Y/Z up, Auto-orient, or by clicking a face to set it face-down on the print plate.\n' +
+          '4. The block is split into 2 or 4 pieces so it can release from the model and be printed flat.\n' +
+          '5. Print the pieces, band or clamp them together, and pour your wax, resin, soap, or plaster through the spout.',
       );
     },
   });
@@ -240,11 +246,46 @@ function loadGeometry(geometry: THREE.BufferGeometry, fileName: string, sizeByte
   state.isExample = isExample;
   state.scalePercent = 100;
   state.seamOffset = 0;
+  state.upAxis = 'y';
+  state.customOrientation = null;
+  setFacePickMode(false);
   invalidateGenerated();
   calloutEl.style.display = 'none';
   render();
   updateScenePreview();
   viewer.fitView();
+}
+
+function setFacePickMode(on: boolean) {
+  state.facePickMode = on;
+  if (on) {
+    if (state.generatedPieceCount) {
+      invalidateGenerated();
+      updateScenePreview();
+    }
+    viewer.setFacePickMode(true, handleFacePicked);
+    showToast('Click a face on the model to set it face-down');
+  } else {
+    viewer.setFacePickMode(false);
+  }
+}
+
+function handleFacePickToggle() {
+  if (!state.rawGeometry) return;
+  setFacePickMode(!state.facePickMode);
+  render();
+}
+
+function handleFacePicked(normal: THREE.Vector3) {
+  const current = state.customOrientation ?? AXIS_QUATERNIONS[state.upAxis];
+  const delta = new THREE.Quaternion().setFromUnitVectors(normal.clone().normalize(), new THREE.Vector3(0, -1, 0));
+  state.customOrientation = delta.multiply(current.clone());
+  setFacePickMode(false);
+  invalidateGenerated();
+  render();
+  updateScenePreview();
+  viewer.fitView();
+  showToast('That face is now facing down');
 }
 
 function handleFile(file: File) {
@@ -266,6 +307,8 @@ function handleClearFile() {
   state.fileName = null;
   state.fileSizeBytes = 0;
   state.triangleCount = 0;
+  state.customOrientation = null;
+  setFacePickMode(false);
   invalidateGenerated();
   render();
   updateScenePreview();

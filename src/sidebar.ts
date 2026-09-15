@@ -13,6 +13,7 @@ export interface SidebarCallbacks {
   onSeamOffset: (mm: number) => void;
   onAutoOrient: () => void;
   onUpAxis: (axis: UpAxis) => void;
+  onFacePickToggle: () => void;
   onPieces: (p: PiecesChoice) => void;
   onGenerate: () => void;
   onDownload: () => void;
@@ -48,8 +49,8 @@ export function renderSidebar(
 
   root.innerHTML = `
     <div class="hero">
-      <div class="hero-title">TWO-PART MOLD</div>
-      <div class="hero-desc">Splits your model into a printable mold with a pour spout, for wax or resin.</div>
+      <div class="hero-title">TURBIT ORGANIC CAST MAKER</div>
+      <div class="hero-desc">Splits your model into a printable two-part mold with a pour spout, for wax, resin, soap, or plaster.</div>
       <div class="hero-rating"><span class="star">&#9733;</span> <strong>4.5</strong> &middot; 141 ratings</div>
       <button class="btn-ghost" id="how-it-works">&#128214; How it works</button>
     </div>
@@ -120,10 +121,14 @@ export function renderSidebar(
       </div>
       <button class="link-btn" id="auto-orient" style="margin-top:12px;">Auto-orient for printing</button>
       <div class="tab-row" style="margin-top:10px;">
-        <button data-axis="x" class="${state.upAxis === 'x' ? 'active' : ''}">X up</button>
-        <button data-axis="y" class="${state.upAxis === 'y' ? 'active' : ''}">Y up</button>
-        <button data-axis="z" class="${state.upAxis === 'z' ? 'active' : ''}">Z up</button>
+        <button data-axis="x" class="${!state.customOrientation && state.upAxis === 'x' ? 'active' : ''}">X up</button>
+        <button data-axis="y" class="${!state.customOrientation && state.upAxis === 'y' ? 'active' : ''}">Y up</button>
+        <button data-axis="z" class="${!state.customOrientation && state.upAxis === 'z' ? 'active' : ''}">Z up</button>
       </div>
+      <button class="link-btn ${state.facePickMode ? 'active-pick' : ''}" id="face-pick-btn" ${hasFile ? '' : 'disabled'} style="margin-top:10px;">
+        ${state.facePickMode ? 'Click a face on the model…' : 'Or click a face to set it face-down'}
+      </button>
+      ${state.customOrientation ? '<div class="helper-text" style="margin-top:6px;">Custom orientation set by clicking a face.</div>' : ''}
     </div>
 
     <div>
@@ -198,6 +203,7 @@ export function renderSidebar(
   root.querySelectorAll<HTMLButtonElement>('[data-axis]').forEach((btn) => {
     btn.addEventListener('click', () => cb.onUpAxis(btn.dataset.axis as UpAxis));
   });
+  root.querySelector('#face-pick-btn')?.addEventListener('click', () => cb.onFacePickToggle());
 
   root.querySelectorAll<HTMLButtonElement>('[data-pieces]').forEach((btn) => {
     btn.addEventListener('click', () => {

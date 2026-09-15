@@ -15,6 +15,9 @@ export interface AppState {
   lockProportions: boolean;
   seamOffset: number;
   upAxis: UpAxis;
+  /** Set when the user picked a face to face down; overrides upAxis until they pick a preset again. */
+  customOrientation: THREE.Quaternion | null;
+  facePickMode: boolean;
   pieces: PiecesChoice;
 
   wireframe: boolean;
@@ -38,6 +41,8 @@ export function createInitialState(): AppState {
     lockProportions: true,
     seamOffset: 0,
     upAxis: 'y',
+    customOrientation: null,
+    facePickMode: false,
     pieces: 2,
 
     wireframe: false,

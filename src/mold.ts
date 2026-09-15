@@ -52,10 +52,16 @@ const UP_ROTATIONS: Record<UpAxis, THREE.Euler> = {
   z: new THREE.Euler(Math.PI / 2, 0, 0),
 };
 
-/** Rotates a geometry (about its own origin) so the chosen model axis becomes world +Y. */
-export function orientGeometry(geometry: THREE.BufferGeometry, upAxis: UpAxis): THREE.BufferGeometry {
+export const AXIS_QUATERNIONS: Record<UpAxis, THREE.Quaternion> = {
+  y: new THREE.Quaternion().setFromEuler(UP_ROTATIONS.y),
+  x: new THREE.Quaternion().setFromEuler(UP_ROTATIONS.x),
+  z: new THREE.Quaternion().setFromEuler(UP_ROTATIONS.z),
+};
+
+/** Rotates a geometry (about its own origin) by the given quaternion, then sits it on the bed. */
+export function orientGeometry(geometry: THREE.BufferGeometry, quaternion: THREE.Quaternion): THREE.BufferGeometry {
   const oriented = geometry.clone();
-  oriented.applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(UP_ROTATIONS[upAxis]));
+  oriented.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(quaternion));
   oriented.computeBoundingBox();
   const box = oriented.boundingBox!;
   // Sit the model on the bed (min Y = 0) and center it in X/Z.

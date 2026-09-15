@@ -15,11 +15,18 @@ export class Viewer {
   private bedSize = 256;
   private modelMesh: THREE.Mesh | null = null;
   private previewGroup = new THREE.Group();
+  private previewObjects: THREE.Object3D[] = [];
+  private previewRestPositions: THREE.Vector3[] = [];
+  private previewExplodeDirections: THREE.Vector3[] = [];
   private pieceGroup = new THREE.Group();
   private pieceMeshes: THREE.Mesh[] = [];
-  private pieceRestPositions: THREE.Vector3[] = [];
   private pieceExplodeDirections: THREE.Vector3[] = [];
+  private explodeAmount = 0;
   private wireframe = false;
+
+  private facePickActive = false;
+  private facePickCallback: ((normal: THREE.Vector3) => void) | null = null;
+  private pointerDownPos: { x: number; y: number } | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -48,8 +55,44 @@ export class Viewer {
     this.setBed(this.bedSize);
 
     window.addEventListener('resize', () => this.resize());
+    this.renderer.domElement.addEventListener('pointerdown', (e) => {
+      this.pointerDownPos = { x: e.clientX, y: e.clientY };
+    });
+    this.renderer.domElement.addEventListener('pointerup', (e) => {
+      if (!this.facePickActive || !this.pointerDownPos) return;
+      const dx = e.clientX - this.pointerDownPos.x;
+      const dy = e.clientY - this.pointerDownPos.y;
+      this.pointerDownPos = null;
+      if (Math.hypot(dx, dy) > 5) return;
+      this.handleFacePickClick(e);
+    });
     this.resize();
     this.animate();
+  }
+
+  setFacePickMode(active: boolean, onPick?: (normal: THREE.Vector3) => void) {
+    this.facePickActive = active;
+    this.facePickCallback = active ? onPick ?? null : null;
+    this.renderer.domElement.style.cursor = active ? 'crosshair' : '';
+  }
+
+  get isFacePickActive() {
+    return this.facePickActive;
+  }
+
+  private handleFacePickClick(e: PointerEvent) {
+    if (!this.modelMesh) return;
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(
+      ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      -((e.clientY - rect.top) / rect.height) * 2 + 1,
+    );
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(ndc, this.camera);
+    const hits = raycaster.intersectObject(this.modelMesh, false);
+    if (hits.length && hits[0].face) {
+      this.facePickCallback?.(hits[0].face.normal.clone());
+    }
   }
 
   private animate = () => {
@@ -131,6 +174,10 @@ export class Viewer {
     splitZ: number | null,
   ) {
     this.previewGroup.clear();
+    this.previewObjects = [];
+    this.previewRestPositions = [];
+    this.previewExplodeDirections = [];
+    const blockCenter = new THREE.Vector3().addVectors(blockMin, blockMax).multiplyScalar(0.5);
     const regions: [THREE.Vector3, THREE.Vector3, number][] = [];
     if (splitZ === null) {
       regions.push([blockMin, new THREE.Vector3(splitX, blockMax.y, blockMax.z), 0]);
@@ -152,27 +199,40 @@ export class Viewer {
         opacity: 0.22,
         depthWrite: false,
       });
+      const group = new THREE.Group();
+      group.position.copy(center);
+      this.previewGroup.add(group);
+
       const mesh = new THREE.Mesh(geo, mat);
-      mesh.position.copy(center);
-      this.previewGroup.add(mesh);
+      group.add(mesh);
 
       const edges = new THREE.LineSegments(
         new THREE.EdgesGeometry(geo),
         new THREE.LineBasicMaterial({ color: PIECE_COLORS[i], transparent: true, opacity: 0.85 }),
       );
-      edges.position.copy(center);
-      this.previewGroup.add(edges);
+      group.add(edges);
+
+      this.previewObjects.push(group);
+      this.previewRestPositions.push(center.clone());
+      const dir = new THREE.Vector3(center.x - blockCenter.x, 0, center.z - blockCenter.z);
+      if (dir.lengthSq() < 1e-6) dir.set(i % 2 === 0 ? -1 : 1, 0, 0);
+      dir.normalize();
+      this.previewExplodeDirections.push(dir);
     }
+
+    this.applyExplode();
   }
 
   clearPreviewSplit() {
     this.previewGroup.clear();
+    this.previewObjects = [];
+    this.previewRestPositions = [];
+    this.previewExplodeDirections = [];
   }
 
   setMoldPieces(geometries: THREE.BufferGeometry[], blockCenter: THREE.Vector3) {
     this.pieceGroup.clear();
     this.pieceMeshes = [];
-    this.pieceRestPositions = [];
     this.pieceExplodeDirections = [];
 
     geometries.forEach((geometry, i) => {
@@ -188,25 +248,37 @@ export class Viewer {
       const mesh = new THREE.Mesh(geometry, material);
       this.pieceGroup.add(mesh);
       this.pieceMeshes.push(mesh);
-      this.pieceRestPositions.push(new THREE.Vector3(0, 0, 0));
       const dir = new THREE.Vector3(center.x - blockCenter.x, 0, center.z - blockCenter.z);
-      if (dir.lengthSq() < 1e-6) dir.set(i === 0 ? -1 : 1, 0, 0);
+      if (dir.lengthSq() < 1e-6) dir.set(i % 2 === 0 ? -1 : 1, 0, 0);
       dir.normalize();
       this.pieceExplodeDirections.push(dir);
     });
+
+    this.applyExplode();
   }
 
   setExplode(amount01: number) {
-    const distance = 60 * amount01;
+    this.explodeAmount = amount01;
+    this.applyExplode();
+  }
+
+  private applyExplode() {
+    const distance = 60 * this.explodeAmount;
     this.pieceMeshes.forEach((mesh, i) => {
       const dir = this.pieceExplodeDirections[i];
       mesh.position.set(dir.x * distance, 0, dir.z * distance);
+    });
+    this.previewObjects.forEach((obj, i) => {
+      const dir = this.previewExplodeDirections[i];
+      const rest = this.previewRestPositions[i];
+      obj.position.set(rest.x + dir.x * distance, rest.y, rest.z + dir.z * distance);
     });
   }
 
   clearMoldPieces() {
     this.pieceGroup.clear();
     this.pieceMeshes = [];
+    this.pieceExplodeDirections = [];
   }
 
   get moldPieceMeshes() {
